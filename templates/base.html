@@ -373,6 +373,11 @@
             const pelangganId = '{{ request.session.pelanggan_id }}';
             
             if (pelangganId) {
+                // WebSocket connection attempt counter
+                let wsConnectionAttempts = 0;
+                const MAX_WS_ATTEMPTS = 3;
+                let wsConnected = false;
+                
                 // Create WebSocket connection
                 // Tentukan skema (ws atau wss) berdasarkan protokol saat ini
                 var ws_scheme = window.location.protocol == "https:" ? "wss" : "ws";
@@ -382,99 +387,123 @@
                 
                 var ws_path = ws_scheme + '://' + ws_host + '/ws/notifikasi/';
                 
-                var socket = new WebSocket(ws_path);
-                
-                // Connection opened
-                socket.addEventListener('open', function (event) {
-                    console.log('WebSocket connection established');
-                });
-                
-                // Listen for messages
-                socket.addEventListener('message', function (event) {
-                    console.log("--- DEBUG WEBSOCKET ---"); 
-                    console.log("Data mentah diterima:", event.data);
-                    const data = JSON.parse(event.data);
-                    console.log("Data objek parsed:", data);
+                try {
+                    var socket = new WebSocket(ws_path);
                     
-                    if (data.notification) {
-                        // Update notification badge
-                        const notifBadge = document.querySelector('.notification-badge');
-                        console.log("Status badge saat ini:", notifBadge ? "Ditemukan" : "Tidak ditemukan, mencoba membuat...");
-                        let currentCount = 0;
+                    // Connection opened
+                    socket.addEventListener('open', function (event) {
+                        console.log('✓ WebSocket connection established successfully');
+                        wsConnected = true;
+                        wsConnectionAttempts = 0;
+                    });
+                    
+                    // Listen for messages
+                    socket.addEventListener('message', function (event) {
+                        console.log("--- DEBUG WEBSOCKET ---"); 
+                        console.log("Data mentah diterima:", event.data);
+                        const data = JSON.parse(event.data);
+                        console.log("Data objek parsed:", data);
                         
-                        if (notifBadge) {
-                            currentCount = parseInt(notifBadge.textContent) || 0;
-                            notifBadge.textContent = currentCount + 1;
-                            notifBadge.style.display = 'flex'; // Make sure it's visible
-                        } else {
-                            // Create badge if it doesn't exist
-                            const notifLink = document.querySelector('a[href="/notifikasi/"]');
-                            if (notifLink) {
-                                const badge = document.createElement('span');
-                                badge.className = 'notification-badge';
-                                badge.textContent = '1';
-                                badge.style.position = 'absolute';
-                                badge.style.top = '0';
-                                badge.style.right = '0';
-                                badge.style.backgroundColor = '#dc3545';
-                                badge.style.color = 'white';
-                                badge.style.borderRadius = '50%';
-                                badge.style.padding = '2px 6px';
-                                badge.style.fontSize = '0.7rem';
-                                badge.style.minWidth = '18px';
-                                badge.style.height = '18px';
-                                badge.style.display = 'flex';
-                                badge.style.alignItems = 'center';
-                                badge.style.justifyContent = 'center';
-                                notifLink.style.position = 'relative';
-                                notifLink.appendChild(badge);
+                        if (data.notification) {
+                            // Update notification badge
+                            const notifBadge = document.querySelector('.notification-badge');
+                            console.log("Status badge saat ini:", notifBadge ? "Ditemukan" : "Tidak ditemukan, mencoba membuat...");
+                            let currentCount = 0;
+                            
+                            if (notifBadge) {
+                                currentCount = parseInt(notifBadge.textContent) || 0;
+                                notifBadge.textContent = currentCount + 1;
+                                notifBadge.style.display = 'flex'; // Make sure it's visible
+                            } else {
+                                // Create badge if it doesn't exist
+                                const notifLink = document.querySelector('a[href="/notifikasi/"]');
+                                if (notifLink) {
+                                    const badge = document.createElement('span');
+                                    badge.className = 'notification-badge';
+                                    badge.textContent = '1';
+                                    badge.style.position = 'absolute';
+                                    badge.style.top = '0';
+                                    badge.style.right = '0';
+                                    badge.style.backgroundColor = '#dc3545';
+                                    badge.style.color = 'white';
+                                    badge.style.borderRadius = '50%';
+                                    badge.style.padding = '2px 6px';
+                                    badge.style.fontSize = '0.7rem';
+                                    badge.style.minWidth = '18px';
+                                    badge.style.height = '18px';
+                                    badge.style.display = 'flex';
+                                    badge.style.alignItems = 'center';
+                                    badge.style.justifyContent = 'center';
+                                    notifLink.style.position = 'relative';
+                                    notifLink.appendChild(badge);
+                                }
                             }
-                        }
-                        
-                        // Show toast notification
-                        showToast(data.notification.tipe_pesan, data.notification.isi_pesan);
-                        
-                        // Trigger shake animation for notification bell
-                        triggerNotificationShake();
-                        
-                        // Update UI automatically if notification is about cancelled order
-                        if (data.notification.tipe_pesan.toLowerCase().includes('dibatalkan') || 
-                            data.notification.tipe_pesan.toLowerCase().includes('refund') ||
-                            data.notification.isi_pesan.toLowerCase().includes('dibatalkan')) {
-                            // Find and update status elements on the page
-                            const statusElements = document.querySelectorAll('[class*="status"], [class*="Status"], .badge, .text-danger, .text-success');
-                            statusElements.forEach(element => {
-                                if (element.textContent.toLowerCase().includes('diproses') || 
-                                    element.textContent.toLowerCase().includes('dibayar') ||
-                                    element.textContent.toLowerCase().includes('dikirim')) {
-                                    element.classList.add('text-danger');
-                                    element.classList.remove('text-success', 'text-info', 'text-warning');
-                                    // Also change the text to show cancellation
+                            
+                            // Show toast notification
+                            showToast(data.notification.tipe_pesan, data.notification.isi_pesan);
+                            
+                            // Trigger shake animation for notification bell
+                            triggerNotificationShake();
+                            
+                            // Update UI automatically if notification is about cancelled order
+                            if (data.notification.tipe_pesan.toLowerCase().includes('dibatalkan') || 
+                                data.notification.tipe_pesan.toLowerCase().includes('refund') ||
+                                data.notification.isi_pesan.toLowerCase().includes('dibatalkan')) {
+                                // Find and update status elements on the page
+                                const statusElements = document.querySelectorAll('[class*="status"], [class*="Status"], .badge, .text-danger, .text-success');
+                                statusElements.forEach(element => {
                                     if (element.textContent.toLowerCase().includes('diproses') || 
                                         element.textContent.toLowerCase().includes('dibayar') ||
                                         element.textContent.toLowerCase().includes('dikirim')) {
-                                        element.textContent = 'DIBATALKAN';
+                                        element.classList.add('text-danger');
+                                        element.classList.remove('text-success', 'text-info', 'text-warning');
+                                        // Also change the text to show cancellation
+                                        if (element.textContent.toLowerCase().includes('diproses') || 
+                                            element.textContent.toLowerCase().includes('dibayar') ||
+                                            element.textContent.toLowerCase().includes('dikirim')) {
+                                            element.textContent = 'DIBATALKAN';
+                                        }
                                     }
-                                }
-                            });
+                                });
+                            }
+                            
+                            // Log refund notification
+                            if (data.notification.tipe_pesan.toLowerCase().includes('refund')) {
+                                console.log("Notifikasi Refund diterima untuk user:", data.notification.id);
+                            }
                         }
+                    });
+                    
+                    // Connection closed
+                    socket.addEventListener('close', function (event) {
+                        console.log('⚠ WebSocket connection closed', event.code, event.reason);
+                        wsConnected = false;
                         
-                        // Log refund notification
-                        if (data.notification.tipe_pesan.toLowerCase().includes('refund')) {
-                            console.log("Notifikasi Refund diterima untuk user:", data.notification.id);
+                        // Only attempt reconnect if it's an abnormal closure and within attempt limit
+                        if (event.code !== 1000 && wsConnectionAttempts < MAX_WS_ATTEMPTS) {
+                            wsConnectionAttempts++;
+                            console.log(`⟳ Attempting to reconnect... (Attempt ${wsConnectionAttempts}/${MAX_WS_ATTEMPTS})`);
+                            setTimeout(function() {
+                                // Recursively try to reconnect
+                                location.reload();
+                            }, 3000 * wsConnectionAttempts); // Exponential backoff
+                        } else if (wsConnectionAttempts >= MAX_WS_ATTEMPTS) {
+                            console.log('✗ WebSocket connection failed after maximum attempts. Real-time notifications disabled.');
+                            console.log('ℹ Application will continue to work normally. Please refresh the page to check for new notifications.');
                         }
-                    }
-                });
-                
-                // Connection closed
-                socket.addEventListener('close', function (event) {
-                    console.log('WebSocket connection closed');
-                });
-                
-                // Connection error
-                socket.addEventListener('error', function (event) {
-                    console.error('WebSocket error: ', event);
-                });
+                    });
+                    
+                    // Connection error
+                    socket.addEventListener('error', function (event) {
+                        console.log('✗ WebSocket connection error (real-time notifications may be unavailable)');
+                        console.log('ℹ This is normal on PythonAnywhere Free Tier. Notifications will still be visible when you refresh the page.');
+                        wsConnected = false;
+                        // Don't show error to user - application continues normally
+                    });
+                } catch (error) {
+                    console.log('✗ WebSocket initialization failed:', error.message);
+                    console.log('ℹ Real-time notifications unavailable. Application will work in polling mode.');
+                }
             }
             
             // Function to show toast notification

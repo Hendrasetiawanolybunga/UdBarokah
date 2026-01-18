@@ -7,6 +7,12 @@ from celery.schedules import crontab
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# ============================================
+# ENVIRONMENT DETECTION FOR HYBRID DEPLOYMENT
+# ============================================
+# Detect if running on PythonAnywhere (Free Tier)
+ON_PYTHONANYWHERE = 'PYTHONANYWHERE_DOMAIN' in os.environ
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
@@ -17,7 +23,7 @@ SECRET_KEY = 'django-insecure-j+fa$j-w-x7ua4upzterye(*1g7j5clih!9ym)0oo$12wf_bf%
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost', 'bluecode2004.pythonanywhere.com']
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '*.pythonanywhere.com', 'BlueCode46NttCode.pythonanywhere.com']
 
 
 # Application definition
@@ -115,6 +121,9 @@ USE_I18N = True
 
 USE_TZ = True
 
+# ============================================
+# STATIC & MEDIA FILES CONFIGURATION
+# ============================================
 # STATIC_URL adalah URL yang digunakan untuk mereferensikan file statis.
 STATIC_URL = '/static/'
 
@@ -126,12 +135,14 @@ STATICFILES_DIRS = [
 
 # STATIC_ROOT adalah direktori tempat file statis dikumpulkan untuk produksi.
 # Jangan tambahkan file statis di sini secara manual.
+# Gunakan: python manage.py collectstatic
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # URL yang digunakan saat mereferensikan file media.
 MEDIA_URL = '/media/'
+# MEDIA_ROOT untuk PythonAnywhere: Pastikan folder media dapat diakses
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
@@ -274,15 +285,28 @@ JAZZMIN_UI_TWEAKS = {
     "actions_sticky_top": False
 }
 
-# Celery Configuration
-CELERY_BROKER_URL = 'redis://127.0.0.1:6379/0'
-CELERY_RESULT_BACKEND = 'redis://127.0.0.1:6379/0'
+# ============================================
+# CELERY CONFIGURATION (HYBRID MODE)
+# ============================================
+if ON_PYTHONANYWHERE:
+    # PythonAnywhere: Run tasks synchronously (no separate worker needed)
+    CELERY_TASK_ALWAYS_EAGER = True
+    CELERY_TASK_EAGER_PROPAGATES = True
+    CELERY_BROKER_URL = 'memory://'
+    CELERY_RESULT_BACKEND = 'cache+memory://'
+else:
+    # Local Development: Use Redis for async task processing
+    CELERY_BROKER_URL = 'redis://127.0.0.1:6379/0'
+    CELERY_RESULT_BACKEND = 'redis://127.0.0.1:6379/0'
+    CELERY_TASK_ALWAYS_EAGER = False
+
+# Common Celery Settings
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Asia/Makassar'
 
-# Celery Beat Schedule
+# Celery Beat Schedule (Note: Scheduled tasks won't run on PythonAnywhere Free Tier)
 CELERY_BEAT_SCHEDULE = {
     'check-birthday-and-loyalty-daily': {
         'task': 'admin_dashboard.tasks.check_birthday_and_loyalty_task',
@@ -290,13 +314,25 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
-# Channels Configuration
+# ============================================
+# CHANNELS CONFIGURATION (HYBRID MODE)
+# ============================================
 ASGI_APPLICATION = 'ProyekBarokah.asgi.application'
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            'hosts': [('127.0.0.1', 6379)],
+
+if ON_PYTHONANYWHERE:
+    # PythonAnywhere: Use InMemory Channel Layer (no Redis needed)
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
         },
-    },
-}
+    }
+else:
+    # Local Development: Use Redis Channel Layer for WebSocket
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                'hosts': [('127.0.0.1', 6379)],
+            },
+        },
+    }
