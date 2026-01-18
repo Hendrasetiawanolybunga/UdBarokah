@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Daftar Pesanan{% endblock %}
+
+{% block content %}
+<div class="container my-5 my-sm-3">
+    <div class="row">
+        <div class="col-12">
+            <h2 class="mb-4 text-center fw-bold fs-3 fs-sm-2" style="color: #059212;">Daftar Pesanan Anda</h2>
+            {% if pesanan %}
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover small">
+                        <thead class="table-success">
+                            <tr>
+                                <th class="fs-7 fs-sm-8">Tanggal Transaksi</th>
+                                <th class="fs-7 fs-sm-8">Total</th>
+                                <th class="fs-7 fs-sm-8">Ongkos Kirim</th>
+                                <th class="fs-7 fs-sm-8">Status</th>
+                                <!-- NEW COLUMN: Info Pembatalan -->
+                                <th class="fs-7 fs-sm-8">Info Pembatalan</th>
+                                <th class="fs-7 fs-sm-8">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for trans in pesanan %}
+                            <tr>
+                                <td class="fs-6 fs-sm-7">{{ trans.tanggal|date:"d M Y H:i" }}</td>
+                                <td class="fs-6 fs-sm-7">Rp {{ trans.total|intcomma }}</td>
+                                <td class="fs-6 fs-sm-7">Rp {{ trans.ongkir|intcomma }}</td>
+                                <td>
+                                    <span class="badge fs-7 fs-sm-8" style="background-color: #059212; color: #ECFFE6;">
+                                        {{ trans.status_transaksi }}
+                                    </span>
+                                </td>
+                                <!-- NEW COLUMN: Info Pembatalan -->
+                                <td class="fs-6 fs-sm-7">
+                                    {% if trans.status_transaksi == 'DIBATALKAN' %}
+                                        <span class="text-danger">
+                                            <strong>Dibatalkan:</strong> 
+                                            {{ trans.catatan_pembatalan|default:"Tanpa alasan" }}
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{% url 'detail_pesanan' trans.id %}" class="btn btn-custom btn-sm fs-7 fs-sm-8">
+                                         <i class="fas fa-eye"></i>
+                                    </a>
+                                    {% if trans.status_transaksi == 'DIPROSES' %}
+                                        <button type="button" class="btn btn-danger btn-sm fs-7 fs-sm-8 ms-1" data-bs-toggle="modal" data-bs-target="#batalModal{{ trans.id }}">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                        
+                                        <!-- Modal untuk pembatalan -->
+                                        <div class="modal fade" id="batalModal{{ trans.id }}" tabindex="-1" aria-labelledby="batalModalLabel{{ trans.id }}" aria-hidden="true">
+                                            <div class="modal-dialog">
+                                                <div class="modal-content">
+                                                    <div class="modal-header">
+                                                        <h5 class="modal-title" id="batalModalLabel{{ trans.id }}">Batalkan Pesanan #{{ trans.id }}</h5>
+                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                    </div>
+                                                    <div class="modal-body">
+                                                        <form method="post" action="{% url 'batalkan_pesanan' trans.id %}">
+                                                            {% csrf_token %}
+                                                            <div class="mb-3">
+                                                                <label for="catatan_pembatalan" class="form-label">Alasan Pembatalan</label>
+                                                                <textarea class="form-control" id="catatan_pembatalan" name="catatan_pembatalan" rows="3" required></textarea>
+                                                            </div>
+                                                            <button type="submit" class="btn btn-danger">Ya, Batalkan Pesanan</button>
+                                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+            <div class="alert alert-info text-center">
+                <i class="fas fa-info-circle me-2"></i>Anda belum memiliki pesanan.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
